@@ -3,6 +3,9 @@
 
 #include "../my_lib/my_net.h"
 #include "setting.h"
+#include <sys/select.h>
+#include <sys/time.h>
+#include <arpa/inet.h>
 
 typedef struct MyPacket {
     char header[4];   /* パケットのヘッダ部(4バイト) */

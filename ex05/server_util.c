@@ -17,37 +17,18 @@ static void addInList(mem_info new_node);
 
 static u_int32_t analyze_header(char *header);
 
+static void login();
+
+static void postMessage();
+
 static mem_info newNode(char user_name[NAME_LENGTH], int sock);
 
 static void showList();
 
 static void create_packet(u_int32_t type, char *message);
 
-static void create_packet(u_int32_t type, char *message) {
-    switch (type) {
-        case HELLO:
-            snprintf(buf, MESG_LENGTH, "HELO");
-            break;
-        case HERE:
-            snprintf(buf, MESG_LENGTH, "HERE");
-            break;
-        case JOIN:
-            snprintf(buf, MESG_LENGTH, "JOIN %s", message);
-            break;
-        case POST:
-            snprintf(buf, MESG_LENGTH, "POST %s", message);
-            break;
-        case MESSAGE:
-            snprintf(buf, MESG_LENGTH, "MESG %s", message);
-            break;
-        case QUIT:
-            snprintf(buf, MESG_LENGTH, "QUIT");
-            break;
-        default:
-            /* Undefined packet type */
-            break;
-    }
-}
+static int hasConnectedUdp();
+
 
 void initialize(in_port_t _port) {
     port = _port;
@@ -62,7 +43,52 @@ void initialize(in_port_t _port) {
     }
 }
 
-int hasConnectedUdp() {
+void mainloop() {
+    while (1) {
+        if (hasConnectedUdp()) {
+            sock_tcp = my_accept(sock_listen, NULL, NULL);
+            break;
+        }
+    }
+    while (1) {
+        my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+        packet = (my_packet *) buf;
+
+        switch (analyze_header(packet->header)) {
+            case JOIN: {
+                login();
+                break;
+            }
+            case POST: {
+                postMessage();
+                break;
+            }
+            case QUIT: {
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+
+static void login() {
+    printf("[INFO] login\n");
+    fflush(stdout);
+    mem_info new_node = newNode(packet->data, sock_tcp);
+    addInList(new_node);
+}
+
+static void postMessage() {
+    printf("[INFO] post\n");
+    fflush(stdout);
+    create_packet(MESSAGE, packet->data);
+    my_sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *) &broadcast_adrs,
+              sizeof(broadcast_adrs));
+}
+
+static int hasConnectedUdp() {
     struct sockaddr_in from_adrs;
     fd_set mask, readfds;
 
@@ -74,6 +100,7 @@ int hasConnectedUdp() {
     while (1) {
         readfds = mask;
         select(sock_udp + 1, &readfds, NULL, NULL, NULL);
+
         if (FD_ISSET(sock_udp, &readfds)) {
             socklen_t from_len = sizeof(from_adrs);
             my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
@@ -90,48 +117,6 @@ int hasConnectedUdp() {
         }
     }
     return has_connected;
-}
-
-void mainloop() {
-    while (1) {
-        if (hasConnectedUdp()) {
-            sock_tcp = my_accept(sock_listen, NULL, NULL);
-        }
-        my_receive(sock_tcp, buf, BUFF_SIZE - 1);
-        packet = (my_packet *) buf;
-        switch (analyze_header(packet->header)) {
-            case JOIN: {
-                mem_info new_node = newNode(packet->data, sock_tcp);
-                addInList(new_node);
-//                showList();
-                break;
-            }
-            case POST: {
-                printf("Now post\n");
-
-                create_packet(MESSAGE, packet->data);
-                printf("%s\n", buf);
-                fflush(stdout);
-
-                my_sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *) &broadcast_adrs,
-                          sizeof(broadcast_adrs));
-            }
-            case MESSAGE:
-            case QUIT:
-            default:
-                break;
-        }
-    }
-}
-
-static u_int32_t analyze_header(char *header) {
-    if (strncmp(header, "HELO", 4) == 0) { return (HELLO); }
-    if (strncmp(header, "HERE", 4) == 0) { return (HERE); }
-    if (strncmp(header, "JOIN", 4) == 0) { return (JOIN); }
-    if (strncmp(header, "POST", 4) == 0) { return (POST); }
-    if (strncmp(header, "MESG", 4) == 0) { return (MESSAGE); }
-    if (strncmp(header, "QUIT", 4) == 0) { return (QUIT); }
-    return 0;
 }
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock) {
@@ -173,10 +158,38 @@ static void showList() {
     }
 }
 
-static void logout() {
-
+static void create_packet(u_int32_t type, char *message) {
+    switch (type) {
+        case HELLO:
+            snprintf(buf, MESG_LENGTH, "HELO");
+            break;
+        case HERE:
+            snprintf(buf, MESG_LENGTH, "HERE");
+            break;
+        case JOIN:
+            snprintf(buf, MESG_LENGTH, "JOIN %s", message);
+            break;
+        case POST:
+            snprintf(buf, MESG_LENGTH, "POST %s", message);
+            break;
+        case MESSAGE:
+            snprintf(buf, MESG_LENGTH, "MESG %s", message);
+            break;
+        case QUIT:
+            snprintf(buf, MESG_LENGTH, "QUIT");
+            break;
+        default:
+            /* Undefined packet type */
+            break;
+    }
 }
 
-static void postMessage() {
-
+static u_int32_t analyze_header(char *header) {
+    if (strncmp(header, "HELO", 4) == 0) { return (HELLO); }
+    if (strncmp(header, "HERE", 4) == 0) { return (HERE); }
+    if (strncmp(header, "JOIN", 4) == 0) { return (JOIN); }
+    if (strncmp(header, "POST", 4) == 0) { return (POST); }
+    if (strncmp(header, "MESG", 4) == 0) { return (MESSAGE); }
+    if (strncmp(header, "QUIT", 4) == 0) { return (QUIT); }
+    return 0;
 }
