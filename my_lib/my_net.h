@@ -35,6 +35,8 @@ int split(char *str, const char *delim, char *outlist[]);
 
 char *chop_nl(char *str);
 
+void chopNl(char *str);
+
 int *malloc_thread_args();
 
 pid_t my_fork();
@@ -43,7 +45,7 @@ void my_echo(int sock, char *buf, size_t buf_size);
 
 int my_accept(int s, struct sockaddr *addr, socklen_t *addrlen);
 
-int my_sendto( int sock, const void *s_buf, size_t strsize, int flags, const struct sockaddr *to, socklen_t tolen);
+int my_sendto(int sock, const void *s_buf, size_t strsize, int flags, const struct sockaddr *to, socklen_t tolen);
 
 int my_recvfrom(int sock, void *r_buf, size_t len, int flags, struct sockaddr *from, socklen_t *fromlen);
 

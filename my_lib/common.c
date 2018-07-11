@@ -38,6 +38,16 @@ char *chop_nl(char *str) {
     return str;
 }
 
+void chopNl(char *str) {
+    char *p = str;
+    while (*p != '\0') {
+        if (*p == '\n') {
+            *p = '\0';
+        }
+        p++;
+    }
+}
+
 int my_sendto(int sock, const void *s_buf, size_t strsize, int flags, const struct sockaddr *to, socklen_t tolen) {
     int r;
     if ((r = sendto(sock, s_buf, strsize, 0, to, tolen)) == -1) {

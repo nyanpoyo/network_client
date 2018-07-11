@@ -2,14 +2,14 @@
 
 static struct MemberInfo head;
 static mem_info mem_p;
-static char buf[BUFF_SIZE];
+static char buf[BUFF_SIZE] = {'\0'};
 static my_packet *packet;
 static int sock_udp, sock_tcp;
 static int sock_listen;
-static struct sockaddr *tcp_addr;
+static struct sockaddr_in broadcast_adrs;
+static struct sockaddr_in from_adrs;
 static in_port_t port;
 static int broadcast_sw = 1;
-static struct sockaddr_in broadcast_adrs;
 
 static void deletefromList(mem_info delete_node);
 
@@ -22,6 +22,8 @@ static void login();
 static void postMessage();
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock);
+
+static char *getNameInList(int sock);
 
 static void showList();
 
@@ -57,6 +59,9 @@ void mainloop() {
         switch (analyze_header(packet->header)) {
             case JOIN: {
                 login();
+                for (int i = 0; i < BUFF_SIZE; ++i) {
+                    buf[i] = '\0';
+                }
                 break;
             }
             case POST: {
@@ -72,7 +77,6 @@ void mainloop() {
     }
 }
 
-
 static void login() {
     printf("[INFO] login\n");
     fflush(stdout);
@@ -83,13 +87,15 @@ static void login() {
 static void postMessage() {
     printf("[INFO] post\n");
     fflush(stdout);
-    create_packet(MESSAGE, packet->data);
-    my_sendto(sock_udp, buf, strlen(buf), 0, (struct sockaddr *) &broadcast_adrs,
-              sizeof(broadcast_adrs));
+    char message[BUFF_SIZE];
+    snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(sock_tcp), packet->data);
+    create_packet(MESSAGE, message);
+    chopNl(buf);
+    printf("sock %d\n",sock_udp);
+    my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &broadcast_adrs, sizeof(broadcast_adrs));
 }
 
 static int hasConnectedUdp() {
-    struct sockaddr_in from_adrs;
     fd_set mask, readfds;
 
     FD_ZERO(&mask);
@@ -105,9 +111,9 @@ static int hasConnectedUdp() {
             socklen_t from_len = sizeof(from_adrs);
             my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
             packet = (my_packet *) buf;
-            if (strcmp(packet->header, ASK_PACKET) == 0) {
-                my_sendto(sock_udp, ACK_PACKET, strlen(ACK_PACKET), 0, (struct sockaddr *) &from_adrs,
-                          sizeof(from_adrs));
+            if (strcmp(packet->header, "HELO") == 0) {
+                create_packet(HERE, "");
+                my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
                 has_connected = 1;
                 break;
             } else {
@@ -125,6 +131,14 @@ static mem_info newNode(char user_name[NAME_LENGTH], int sock) {
     strcpy(new_node->username, user_name);
     new_node->next = NULL;
     return new_node;
+}
+
+static char *getNameInList(int sock) {
+    mem_info p = mem_p;
+    while ((p->sock != sock) && (p->next != NULL)) {
+        p = p->next;
+    }
+    return p->username;
 }
 
 static void addInList(mem_info new_node) {
