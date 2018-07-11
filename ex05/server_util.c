@@ -59,9 +59,6 @@ void mainloop() {
         switch (analyze_header(packet->header)) {
             case JOIN: {
                 login();
-                for (int i = 0; i < BUFF_SIZE; ++i) {
-                    buf[i] = '\0';
-                }
                 break;
             }
             case POST: {
@@ -84,7 +81,7 @@ static void login() {
     addInList(new_node);
 }
 
-static void postMessage() {
+static void postMessage() { //serverからclientにブロードキャスト送信
     printf("[INFO] post\n");
     fflush(stdout);
     char message[BUFF_SIZE];
