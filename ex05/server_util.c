@@ -10,6 +10,8 @@ static struct sockaddr_in broadcast_adrs;
 static struct sockaddr_in from_adrs;
 static in_port_t port;
 static int broadcast_sw = 1;
+static struct timeval timeout;
+
 
 static void deletefromList(mem_info delete_node);
 
@@ -31,46 +33,119 @@ static void create_packet(u_int32_t type, char *message);
 
 static int hasConnectedUdp();
 
+static void clearBuf();
+
 
 void initialize(in_port_t _port) {
     port = _port;
     my_set_sockaddr_in_broadcast(&broadcast_adrs, port);
 
     sock_udp = init_udpserver(port);
-    sock_listen = init_tcpserver(DEFAULT_PORT, 5);
+    sock_listen = init_tcpserver(port, 5);
     head.next = NULL;
+    mem_p = &head;
+
     if (setsockopt(sock_udp, SOL_SOCKET, SO_BROADCAST, (void *) &broadcast_sw, sizeof(broadcast_sw)) ==
         -1) {
         exit_errmesg("setsockopt()");
     }
+
+    timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = 0;
 }
 
 void mainloop() {
+    fd_set mask, readfds;
+    FD_ZERO(&mask);
+
     while (1) {
         if (hasConnectedUdp()) {
             sock_tcp = my_accept(sock_listen, NULL, NULL);
+
+            my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+            packet = (my_packet *) buf;
+
+            switch (analyze_header(packet->header)) {
+                case JOIN: {
+                    login();
+                    showList();
+                    break;
+                }
+                default:
+                    break;
+            }
+            clearBuf();
             break;
         }
     }
-    while (1) {
-        my_receive(sock_tcp, buf, BUFF_SIZE - 1);
-        packet = (my_packet *) buf;
 
-        switch (analyze_header(packet->header)) {
-            case JOIN: {
-                login();
-                break;
-            }
-            case POST: {
-                postMessage();
-                break;
-            }
-            case QUIT: {
-                break;
-            }
-            default:
-                break;
+    while (1) {
+
+        mem_info p = mem_p;
+        mem_info q = mem_p;
+
+        FD_SET(sock_tcp, &mask);
+        FD_SET(0, &mask);
+        while (p->next != NULL) {
+            FD_SET(p->sock, &mask);
+            p = p->next;
         }
+
+        readfds = mask;
+        select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
+
+//        if (FD_ISSET(sock_tcp, &readfds)) {
+//            my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+//            packet = (my_packet *) buf;
+//
+//            switch (analyze_header(packet->header)) {
+//                case JOIN: {
+//                    login();
+//                    showList();
+//                    break;
+//                }
+//                default:
+//                    break;
+//            }
+//        }
+
+        while (q->next != NULL) {
+            if (FD_ISSET(q->sock, &readfds)) {
+                my_receive(q->sock, buf, BUFF_SIZE - 1);
+                packet = (my_packet *) buf;
+
+                switch (analyze_header(packet->header)) {
+                    case POST: {
+                        postMessage();
+                        break;
+                    }
+                    case QUIT: {
+                        break;
+                    }
+                    default:
+                        break;
+                }
+                clearBuf();
+            }
+            q = q->next;
+        }
+
+        if (FD_ISSET(0, &readfds)) {
+            char input_buff[BUFF_SIZE];
+            fgets(input_buff, BUFF_SIZE, stdin);
+            chopNl(input_buff);
+            create_packet(MESSAGE, input_buff);
+            my_send(sock_tcp, buf, strlen(buf));
+            printf("[post] %s\n", buf);
+        }
+    }
+}
+
+static void clearBuf() {
+    char *p = buf;
+    while (*p != '\0') {
+        *p = '\0';
+        p++;
     }
 }
 
@@ -81,15 +156,18 @@ static void login() {
     addInList(new_node);
 }
 
-static void postMessage() { //serverからclientにブロードキャスト送信
-    printf("[INFO] post\n");
-    fflush(stdout);
+static void postMessage() {
     char message[BUFF_SIZE];
-    snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(sock_tcp), packet->data);
+    snprintf(message, BUFF_SIZE, "%s", packet->data);
     create_packet(MESSAGE, message);
     chopNl(buf);
-    printf("sock %d\n",sock_udp);
-    my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &broadcast_adrs, sizeof(broadcast_adrs));
+    mem_info p = mem_p;
+    while (p->next != NULL) {
+        my_send(p->sock, buf, BUFF_SIZE);
+        p = p->next;
+    }
+//    my_send(sock_tcp, buf, BUFF_SIZE);
+    printf("[post] %s\n", buf);
 }
 
 static int hasConnectedUdp() {
@@ -98,12 +176,12 @@ static int hasConnectedUdp() {
     FD_ZERO(&mask);
     FD_SET(sock_udp, &mask);
 
-    int has_connected = 0;
+    static int has_connected = 0;
 
-    while (1) {
-        readfds = mask;
-        select(sock_udp + 1, &readfds, NULL, NULL, NULL);
-
+    readfds = mask;
+    if (select(sock_udp + 1, &readfds, NULL, NULL, &timeout) == 0) {
+        return 0;
+    } else {
         if (FD_ISSET(sock_udp, &readfds)) {
             socklen_t from_len = sizeof(from_adrs);
             my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
@@ -112,10 +190,8 @@ static int hasConnectedUdp() {
                 create_packet(HERE, "");
                 my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
                 has_connected = 1;
-                break;
             } else {
                 has_connected = 0;
-                break;
             }
         }
     }
@@ -139,7 +215,6 @@ static char *getNameInList(int sock) {
 }
 
 static void addInList(mem_info new_node) {
-    mem_p = &head;
     new_node->next = mem_p;
     mem_p = new_node;
 }
