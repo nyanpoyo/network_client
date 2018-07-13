@@ -21,7 +21,7 @@ static u_int32_t analyze_header(char *header);
 
 static void login();
 
-static void postMessage();
+static void postMessage(int _sock);
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock);
 
@@ -31,7 +31,7 @@ static void showList();
 
 static void create_packet(u_int32_t type, char *message);
 
-static int hasConnectedUdp();
+static void checkUdpConnect(int signo);
 
 static void clearBuf();
 
@@ -57,32 +57,30 @@ void initialize(in_port_t _port) {
 void mainloop() {
     fd_set mask, readfds;
     FD_ZERO(&mask);
+    struct sigaction action;
+    /* シグナルハンドラを設定する */
+    action.sa_handler = checkUdpConnect;
 
-    while (1) {
-        if (hasConnectedUdp()) {
-            sock_tcp = my_accept(sock_listen, NULL, NULL);
+    if (sigfillset(&action.sa_mask) == -1) {
+        exit_errmesg("sigfillset()");
+    }
+    action.sa_flags = 0;
+    if (sigaction(SIGIO, &action, NULL) == -1) {
+        exit_errmesg("sigaction()");
+    }
+    /* ソケットの所有者を自分自身にする */
+    if (fcntl(sock_udp, F_SETOWN, getpid()) == -1) {
+        exit_errmesg("fcntl():F_SETOWN");
+    }
 
-            my_receive(sock_tcp, buf, BUFF_SIZE - 1);
-            packet = (my_packet *) buf;
-
-            switch (analyze_header(packet->header)) {
-                case JOIN: {
-                    login();
-                    showList();
-                    break;
-                }
-                default:
-                    break;
-            }
-            clearBuf();
-            break;
-        }
+    /* ソケットをノンブロッキング, 非同期モードにする */
+    if (fcntl(sock_udp, F_SETFL, O_NONBLOCK | O_ASYNC) == -1) {
+        exit_errmesg("fcntl():F_SETFL");
     }
 
     while (1) {
-
         mem_info p = mem_p;
-        mem_info q = mem_p;
+        mem_info sock_p = mem_p;
 
         FD_SET(sock_tcp, &mask);
         FD_SET(0, &mask);
@@ -94,29 +92,14 @@ void mainloop() {
         readfds = mask;
         select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
 
-//        if (FD_ISSET(sock_tcp, &readfds)) {
-//            my_receive(sock_tcp, buf, BUFF_SIZE - 1);
-//            packet = (my_packet *) buf;
-//
-//            switch (analyze_header(packet->header)) {
-//                case JOIN: {
-//                    login();
-//                    showList();
-//                    break;
-//                }
-//                default:
-//                    break;
-//            }
-//        }
-
-        while (q->next != NULL) {
-            if (FD_ISSET(q->sock, &readfds)) {
-                my_receive(q->sock, buf, BUFF_SIZE - 1);
+        while (sock_p->next != NULL) {
+            if (FD_ISSET(sock_p->sock, &readfds)) {
+                my_receive(sock_p->sock, buf, BUFF_SIZE - 1);
                 packet = (my_packet *) buf;
 
                 switch (analyze_header(packet->header)) {
                     case POST: {
-                        postMessage();
+                        postMessage(sock_p->sock);
                         break;
                     }
                     case QUIT: {
@@ -127,16 +110,21 @@ void mainloop() {
                 }
                 clearBuf();
             }
-            q = q->next;
+            sock_p = sock_p->next;
         }
+
+        sock_p = mem_p;
 
         if (FD_ISSET(0, &readfds)) {
             char input_buff[BUFF_SIZE];
             fgets(input_buff, BUFF_SIZE, stdin);
             chopNl(input_buff);
             create_packet(MESSAGE, input_buff);
-            my_send(sock_tcp, buf, strlen(buf));
-            printf("[post] %s\n", buf);
+            while (sock_p->next != NULL) {
+                my_send(sock_p->sock, buf, strlen(buf));
+                sock_p = sock_p->next;
+            }
+            printf("[input] %s\n", buf);
         }
     }
 }
@@ -156,9 +144,9 @@ static void login() {
     addInList(new_node);
 }
 
-static void postMessage() {
+static void postMessage(int _sock) {
     char message[BUFF_SIZE];
-    snprintf(message, BUFF_SIZE, "%s", packet->data);
+    snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(_sock), packet->data);
     create_packet(MESSAGE, message);
     chopNl(buf);
     mem_info p = mem_p;
@@ -166,36 +154,38 @@ static void postMessage() {
         my_send(p->sock, buf, BUFF_SIZE);
         p = p->next;
     }
-//    my_send(sock_tcp, buf, BUFF_SIZE);
     printf("[post] %s\n", buf);
 }
 
-static int hasConnectedUdp() {
-    fd_set mask, readfds;
+static void checkUdpConnect(int signo) {
 
-    FD_ZERO(&mask);
-    FD_SET(sock_udp, &mask);
-
-    static int has_connected = 0;
-
-    readfds = mask;
-    if (select(sock_udp + 1, &readfds, NULL, NULL, &timeout) == 0) {
-        return 0;
-    } else {
-        if (FD_ISSET(sock_udp, &readfds)) {
-            socklen_t from_len = sizeof(from_adrs);
-            my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
-            packet = (my_packet *) buf;
-            if (strcmp(packet->header, "HELO") == 0) {
-                create_packet(HERE, "");
-                my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
-                has_connected = 1;
-            } else {
-                has_connected = 0;
-            }
-        }
+    socklen_t from_len = sizeof(from_adrs);
+    if (my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len) == -1 &&
+        errno == EWOULDBLOCK) {
+        printf("[INFO] EWOULDBLOCK\n");
+        return;
     }
-    return has_connected;
+    packet = (my_packet *) buf;
+    if (strcmp(packet->header, "HELO") == 0) {
+        create_packet(HERE, "");
+        my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
+    }
+
+    sock_tcp = my_accept(sock_listen, NULL, NULL);
+
+    my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+    packet = (my_packet *) buf;
+
+    switch (analyze_header(packet->header)) {
+        case JOIN: {
+            login();
+            showList();
+            break;
+        }
+        default:
+            break;
+    }
+    clearBuf();
 }
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock) {

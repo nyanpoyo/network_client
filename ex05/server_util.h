@@ -6,6 +6,10 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <errno.h>
+
 
 typedef struct MyPacket {
     char header[4];   /* パケットのヘッダ部(4バイト) */
