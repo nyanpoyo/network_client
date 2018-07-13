@@ -11,6 +11,7 @@ static struct sockaddr_in from_adrs;
 static in_port_t port;
 static int broadcast_sw = 1;
 static struct timeval timeout;
+static char *name;
 
 
 static void deletefromList(mem_info delete_node);
@@ -35,9 +36,12 @@ static void checkUdpConnect(int signo);
 
 static void clearBuf();
 
-
-void initialize(in_port_t _port) {
+void initializeServer(char *_name, in_port_t _port) {
+    name = _name;
     port = _port;
+    timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = 0;
+
     my_set_sockaddr_in_broadcast(&broadcast_adrs, port);
 
     sock_udp = init_udpserver(port);
@@ -49,12 +53,9 @@ void initialize(in_port_t _port) {
         -1) {
         exit_errmesg("setsockopt()");
     }
-
-    timeout.tv_sec = TIMEOUT_SEC;
-    timeout.tv_usec = 0;
 }
 
-void mainloop() {
+void server_mainloop() {
     fd_set mask, readfds;
     FD_ZERO(&mask);
     struct sigaction action;
@@ -117,14 +118,17 @@ void mainloop() {
 
         if (FD_ISSET(0, &readfds)) {
             char input_buff[BUFF_SIZE];
+            char message[BUFF_SIZE];
             fgets(input_buff, BUFF_SIZE, stdin);
-            chopNl(input_buff);
-            create_packet(MESSAGE, input_buff);
+            chopNl(input_buff, BUFF_SIZE);
+            snprintf(message, BUFF_SIZE, "[%s] %s", name, input_buff);
+            create_packet(MESSAGE, message);
             while (sock_p->next != NULL) {
                 my_send(sock_p->sock, buf, strlen(buf));
                 sock_p = sock_p->next;
             }
             printf("[input] %s\n", buf);
+            clearBuf();
         }
     }
 }
@@ -148,7 +152,7 @@ static void postMessage(int _sock) {
     char message[BUFF_SIZE];
     snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(_sock), packet->data);
     create_packet(MESSAGE, message);
-    chopNl(buf);
+    chopNl(buf, BUFF_SIZE);
     mem_info p = mem_p;
     while (p->next != NULL) {
         my_send(p->sock, buf, BUFF_SIZE);

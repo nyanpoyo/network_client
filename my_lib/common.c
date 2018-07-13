@@ -38,13 +38,11 @@ char *chop_nl(char *str) {
     return str;
 }
 
-void chopNl(char *str) {
-    char *p = str;
-    while (*p != '\0') {
-        if (*p == '\n') {
-            *p = '\0';
+void chopNl(char *str, int size) {
+    for (int i = 0; i < size; ++i) {
+        if (str[i] == '\n') {
+            str[i] = '\0';
         }
-        p++;
     }
 }
 

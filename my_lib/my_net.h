@@ -35,7 +35,7 @@ int split(char *str, const char *delim, char *outlist[]);
 
 char *chop_nl(char *str);
 
-void chopNl(char *str);
+void chopNl(char *str, int size);
 
 int *malloc_thread_args();
 

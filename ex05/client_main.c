@@ -1,20 +1,11 @@
 #include "../my_lib/my_net.h"
-#include <sys/select.h>
-#include <sys/time.h>
-#include <arpa/inet.h>
 #include "client_util.h"
+#include "server_util.h"
 
 int main(int argc, char *argv[]) {
     int opt;
     in_port_t port = DEFAULT_PORT;
-    char *name;
-
-    int sock;
-    char s_buf[S_BUFSIZE], r_buf[R_BUFSIZE];
-    struct sockaddr_in broadcast_adrs;
-    struct sockaddr_in from_adrs;
-
-    my_packet packet;
+    char *name = DEFAULT_NAME;
 
     enum Mode mode;
 
@@ -23,7 +14,6 @@ int main(int argc, char *argv[]) {
             case 'n':
                 if (strlen(optarg) > NAME_LENGTH) {
                     fprintf(stderr, "Too long name\n");
-                    name = DEFAULT_NAME;
                 } else {
                     name = optarg;
                 }
@@ -37,24 +27,18 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    sock = init_udpclient();
-
-    c_set_sockaddr_in_broadcast(&broadcast_adrs, port);
-
-    mode = initializeMode(&sock, &broadcast_adrs, &from_adrs, &packet);
+    mode = setMode(name,port);
 
     switch (mode) {
         case SERVER:
-            printf("I am server\n");
+            initializeServer(name, port);
+            server_mainloop();
             break;
         case CLIENT:
-            printf("I am client\n");
+            initializeClient();
+            client_mainloop();
             break;
-        default:
-            fprintf(stderr, "Mode Choise Error!\n");
-            return -1;
     }
-    close(sock);             /* ソケットを閉じる */
 
     exit(EXIT_SUCCESS);
 }

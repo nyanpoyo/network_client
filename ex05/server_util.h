@@ -23,6 +23,6 @@ typedef struct MemberInfo {
     struct MemberInfo *next;        /* 次のユーザ */
 } *mem_info;
 
-void initialize(in_port_t _port);
-void mainloop();
+void server_mainloop();
+void initializeServer(char *_name, in_port_t _port);
 #endif //SERVER_SERVER_UTIL_H
