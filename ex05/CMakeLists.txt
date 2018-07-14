@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(server C)
 
 set(CMAKE_C_STANDARD 99)
-set(MAIN ex05/server_main.c)
+set(MAIN ex05/client_main.c)
 set(MYLIB my_lib)
 set(
         SOURCE_FILES

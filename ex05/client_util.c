@@ -93,11 +93,14 @@ void client_mainloop() {
     FD_SET(sock_tcp, &mask);
     FD_SET(0, &mask);
 
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+
     join();
 
     while (1) {
         readfds = mask;
-        select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
+        select(sock_tcp + 1, &readfds, NULL, NULL, &timeout);
 
         if (FD_ISSET(sock_tcp, &readfds)) {
             receiveMessage();
@@ -131,15 +134,14 @@ static void receiveMessage() {
 static void postMessage() {
     char input_buff[BUFF_SIZE];
     fgets(input_buff, BUFF_SIZE, stdin);
-    my_packet *input = (my_packet *) input_buff;
-    if (strcmp(input->header, "QUIT") == 0) {
+    chopNl(input_buff,BUFF_SIZE);
+    if (strcmp(input_buff, "QUIT") == 0) {
         create_packet(QUIT, "");
         my_send(sock_tcp, buf, strlen(buf), 0);
         printf("[post] %s\n", buf);
         close(sock_tcp);
         exit(0);
     } else {
-        chopNl(input_buff, BUFF_SIZE);
         create_packet(POST, input_buff);
         my_send(sock_tcp, buf, strlen(buf), 0);
         printf("[post] %s\n", buf);

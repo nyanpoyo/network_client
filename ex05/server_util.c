@@ -12,6 +12,7 @@ static in_port_t port;
 static int broadcast_sw = 1;
 static struct timeval timeout;
 static char *name;
+static int max_sd = 0;
 
 static void deletefromList(mem_info delete_node);
 
@@ -80,19 +81,23 @@ void server_mainloop() {
     }
 
     while (1) {
-        if (mem_p->sock != DUMMY_SOCK) { //joinされてリストにsockが格納されてから通信を始めることを保証
-            mem_info p = mem_p;
-            mem_info sock_p = mem_p;
+        mem_info sock_p = mem_p;
+        if (sock_p->sock != DUMMY_SOCK) { //joinされてリストにsockが格納されてから通信を始めることを保証
 
-            FD_SET(sock_tcp, &mask);
             FD_SET(0, &mask);
-            while (p->next != NULL) {
-                FD_SET(p->sock, &mask);
-                p = p->next;
+            while (sock_p->next != NULL) {
+                FD_SET(sock_p->sock, &mask);
+                printf("set %d\n", sock_p->sock);
+                sock_p = sock_p->next;
             }
 
+            sock_p = mem_p;
+
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+
             readfds = mask;
-            select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
+            select(max_sd + 1, &readfds, NULL, NULL, &timeout);
 
             while (sock_p->next != NULL) {
                 if (FD_ISSET(sock_p->sock, &readfds)) {
@@ -155,17 +160,14 @@ static void postMessage(int _sock) {
     snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(_sock), packet->data);
     create_packet(MESSAGE, message);
     chopNl(buf, BUFF_SIZE);
-    mem_info p = mem_p;
-    while (p->next != NULL) {
-        my_send(p->sock, buf, BUFF_SIZE, 0);
-        p = p->next;
-    }
+
+    my_send(_sock, buf, BUFF_SIZE, SO_NOSIGPIPE);
     printf("[post] %s\n", buf);
     clearBuf();
 }
 
 static void checkUdpConnect(int signo) {
-
+    printf("[INFO] detected UDP connection\n");
     socklen_t from_len = sizeof(from_adrs);
     if (my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len) == -1 &&
         errno == EWOULDBLOCK) {
@@ -179,6 +181,7 @@ static void checkUdpConnect(int signo) {
     }
 
     sock_tcp = my_accept(sock_listen, NULL, NULL);
+    max_sd = sock_tcp;
 
     my_receive(sock_tcp, buf, BUFF_SIZE - 1);
     packet = (my_packet *) buf;
