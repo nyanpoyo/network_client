@@ -93,7 +93,9 @@ void server_mainloop() {
                         }
                         case QUIT: {
                             logout(sock_p->sock);
+#ifdef DEBUG_MODE
                             showList();
+#endif
                             FD_CLR(sock_p->sock, &mask);
                             break;
                         }
@@ -198,7 +200,9 @@ static void checkUdpConnect() {
         switch (analyze_header(packet->header)) {
             case JOIN: {
                 login();
+#ifdef DEBUG_MODE
                 showList();
+#endif
                 break;
             }
             default:
@@ -231,22 +235,20 @@ static void addInList(mem_info new_node) {
 
 static void deletefromList(int sock) {
     mem_info *pp;
-    pp = &(mem_p->next);
+    pp = &mem_p;
     while (((*pp)->sock != sock)) {
         pp = &((*pp)->next);
     }
-    if ((*pp)->next != NULL) {
-        mem_info temp = (*pp)->next;
-        free(*pp);
-        *pp = temp;
-    } else {
-        free(*pp);
-        *pp = NULL;
-    }
+    mem_info temp = (*pp)->next;
+    free(*pp);
+    *pp = temp;
 }
 
 static void showList() {
     mem_info p = mem_p;
+    if(p->next == NULL){
+        printf("Nothing in List\n");
+    }
     while (p->next != NULL) {
         printf("name:%s\tsock:%d\n", p->username, p->sock);
         fflush(stdout);
