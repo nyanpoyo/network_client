@@ -4,12 +4,13 @@
 
 int main(int argc, char *argv[]) {
     int opt;
+    int has_set_mode = 0;
     in_port_t port = DEFAULT_PORT;
     char *name = DEFAULT_NAME;
 
     enum Mode mode;
 
-    while ((opt = getopt(argc, argv, "n:p:")) != -1) {
+    while ((opt = getopt(argc, argv, "SCn:p:")) != -1) {
         switch (opt) {
             case 'n':
                 if (strlen(optarg) > NAME_LENGTH) {
@@ -21,17 +22,27 @@ int main(int argc, char *argv[]) {
             case 'p':
                 port = atoi(optarg);
                 break;
+            case 'S':
+                initializeServer(name, DEFAULT_PORT);
+                server_mainloop();
+                break;
+            case 'C':
+                mode = setMode(name, port);
+                has_set_mode = 1;
+                break;
             case '?':
                 fprintf(stderr, "Unknow option '%c'\n", optopt);
                 break;
         }
     }
 
-    mode = setMode(name,port);
+    if (!has_set_mode) {
+        mode = setMode(name, port);
+    }
 
     switch (mode) {
         case SERVER:
-            initializeServer(name, port);
+            initializeServer(name, DEFAULT_PORT);
             server_mainloop();
             break;
         case CLIENT:

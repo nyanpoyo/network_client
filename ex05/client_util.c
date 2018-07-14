@@ -93,14 +93,11 @@ void client_mainloop() {
     FD_SET(sock_tcp, &mask);
     FD_SET(0, &mask);
 
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
-
     join();
 
     while (1) {
         readfds = mask;
-        select(sock_tcp + 1, &readfds, NULL, NULL, &timeout);
+        select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
 
         if (FD_ISSET(sock_tcp, &readfds)) {
             receiveMessage();
