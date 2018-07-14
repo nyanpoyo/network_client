@@ -27,7 +27,7 @@ void my_set_sockaddr_in_broadcast(struct sockaddr_in *server_adrs, in_port_t por
 
 ssize_t my_receive(int sock, void *buf, size_t buf_size);
 
-ssize_t my_send(int sock, const void *buf, size_t str_size);
+ssize_t my_send(int sock, const void *buf, size_t str_size, int flag);
 
 void exit_errmesg(char *errmesg);
 

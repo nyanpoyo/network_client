@@ -13,7 +13,6 @@ static int broadcast_sw = 1;
 static struct timeval timeout;
 static char *name;
 
-
 static void deletefromList(mem_info delete_node);
 
 static void addInList(mem_info new_node);
@@ -47,6 +46,7 @@ void initializeServer(char *_name, in_port_t _port) {
     sock_udp = init_udpserver(port);
     sock_listen = init_tcpserver(port, 5);
     head.next = NULL;
+    head.sock = DUMMY_SOCK;
     mem_p = &head;
 
     if (setsockopt(sock_udp, SOL_SOCKET, SO_BROADCAST, (void *) &broadcast_sw, sizeof(broadcast_sw)) ==
@@ -80,55 +80,57 @@ void server_mainloop() {
     }
 
     while (1) {
-        mem_info p = mem_p;
-        mem_info sock_p = mem_p;
+        if (mem_p->sock != DUMMY_SOCK) { //joinされてリストにsockが格納されてから通信を始めることを保証
+            mem_info p = mem_p;
+            mem_info sock_p = mem_p;
 
-        FD_SET(sock_tcp, &mask);
-        FD_SET(0, &mask);
-        while (p->next != NULL) {
-            FD_SET(p->sock, &mask);
-            p = p->next;
-        }
-
-        readfds = mask;
-        select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
-
-        while (sock_p->next != NULL) {
-            if (FD_ISSET(sock_p->sock, &readfds)) {
-                my_receive(sock_p->sock, buf, BUFF_SIZE - 1);
-                packet = (my_packet *) buf;
-
-                switch (analyze_header(packet->header)) {
-                    case POST: {
-                        postMessage(sock_p->sock);
-                        break;
-                    }
-                    case QUIT: {
-                        break;
-                    }
-                    default:
-                        break;
-                }
-                clearBuf();
+            FD_SET(sock_tcp, &mask);
+            FD_SET(0, &mask);
+            while (p->next != NULL) {
+                FD_SET(p->sock, &mask);
+                p = p->next;
             }
-            sock_p = sock_p->next;
-        }
 
-        sock_p = mem_p;
+            readfds = mask;
+            select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
 
-        if (FD_ISSET(0, &readfds)) {
-            char input_buff[BUFF_SIZE];
-            char message[BUFF_SIZE];
-            fgets(input_buff, BUFF_SIZE, stdin);
-            chopNl(input_buff, BUFF_SIZE);
-            snprintf(message, BUFF_SIZE, "[%s] %s", name, input_buff);
-            create_packet(MESSAGE, message);
             while (sock_p->next != NULL) {
-                my_send(sock_p->sock, buf, strlen(buf));
+                if (FD_ISSET(sock_p->sock, &readfds)) {
+                    my_receive(sock_p->sock, buf, BUFF_SIZE - 1);
+                    packet = (my_packet *) buf;
+
+                    switch (analyze_header(packet->header)) {
+                        case POST: {
+                            postMessage(sock_p->sock);
+                            break;
+                        }
+                        case QUIT: {
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    clearBuf();
+                }
                 sock_p = sock_p->next;
             }
-            printf("[input] %s\n", buf);
-            clearBuf();
+
+            sock_p = mem_p;
+
+            if (FD_ISSET(0, &readfds)) {
+                char input_buff[BUFF_SIZE];
+                char message[BUFF_SIZE];
+                fgets(input_buff, BUFF_SIZE, stdin);
+                chopNl(input_buff, BUFF_SIZE);
+                snprintf(message, BUFF_SIZE, "[%s] %s", name, input_buff);
+                create_packet(MESSAGE, message);
+                while (sock_p->next != NULL) {
+                    my_send(sock_p->sock, buf, strlen(buf), SO_NOSIGPIPE);
+                    sock_p = sock_p->next;
+                }
+                printf("[input] %s\n", buf);
+                clearBuf();
+            }
         }
     }
 }
@@ -155,10 +157,11 @@ static void postMessage(int _sock) {
     chopNl(buf, BUFF_SIZE);
     mem_info p = mem_p;
     while (p->next != NULL) {
-        my_send(p->sock, buf, BUFF_SIZE);
+        my_send(p->sock, buf, BUFF_SIZE, 0);
         p = p->next;
     }
     printf("[post] %s\n", buf);
+    clearBuf();
 }
 
 static void checkUdpConnect(int signo) {

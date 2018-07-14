@@ -35,7 +35,6 @@ int main(int argc, char *argv[]) {
             server_mainloop();
             break;
         case CLIENT:
-            initializeClient();
             client_mainloop();
             break;
     }

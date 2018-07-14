@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <arpa/inet.h>
 
+
 enum Mode {
     CLIENT,
     SERVER
@@ -20,6 +21,5 @@ enum Mode {
 
 enum Mode setMode(char *_name, in_port_t _port);
 void client_mainloop();
-void initializeClient();
 
 #endif //CLIENT_CLIENT_UTIL_H

@@ -24,9 +24,6 @@ static void clearBuf();
 
 static u_int32_t analyze_header(char *header);
 
-void initializeClient() {
-
-}
 
 enum Mode setMode(char *_name, in_port_t _port) {
     name = _name;
@@ -114,7 +111,7 @@ void client_mainloop() {
 
 static void join() {
     create_packet(JOIN, name);
-    my_send(sock_tcp, buf, strlen(buf));
+    my_send(sock_tcp, buf, strlen(buf), 0);
     clearBuf();
 }
 
@@ -137,14 +134,14 @@ static void postMessage() {
     my_packet *input = (my_packet *) input_buff;
     if (strcmp(input->header, "QUIT") == 0) {
         create_packet(QUIT, "");
-        my_send(sock_tcp, buf, strlen(buf));
+        my_send(sock_tcp, buf, strlen(buf), 0);
         printf("[post] %s\n", buf);
         close(sock_tcp);
         exit(0);
     } else {
         chopNl(input_buff, BUFF_SIZE);
         create_packet(POST, input_buff);
-        my_send(sock_tcp, buf, strlen(buf));
+        my_send(sock_tcp, buf, strlen(buf), 0);
         printf("[post] %s\n", buf);
     }
     clearBuf();

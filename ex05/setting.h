@@ -6,9 +6,7 @@
 #define DEFAULT_NAME "unknown"
 #define TIMEOUT_SEC 1
 #define NAME_LENGTH 15
-#define ASK_PACKET "HELO"
-#define ACK_PACKET "HERE"
-#define JOIN_PACKET "JOIN"
+#define DUMMY_SOCK -1
 #define MESG_LENGTH 488
 
 typedef enum Header {

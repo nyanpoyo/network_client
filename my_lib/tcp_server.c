@@ -36,9 +36,9 @@ ssize_t my_receive(int sock, void *buf, size_t buf_size) {
     return size;
 }
 
-ssize_t my_send(int sock, const void *buf, size_t str_size) {
+ssize_t my_send(int sock, const void *buf, size_t str_size, int flag) {
     ssize_t size;
-    if ((size = send(sock, buf, str_size, 0)) == -1) {
+    if ((size = send(sock, buf, str_size, flag)) == -1) {
         exit_errmesg("recv()");
     }
     return size;
@@ -56,6 +56,6 @@ void my_echo(int sock, char *buf, size_t buf_size) {
     int str_size;
     do {
         str_size = my_receive(sock, buf, buf_size);
-        my_send(sock, buf, str_size);
+        my_send(sock, buf, str_size,0);
     } while ((buf[str_size - 1]) != '\n');
 }
