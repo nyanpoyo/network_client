@@ -1,5 +1,7 @@
 #include "server_util.h"
 
+#define DEBUG_MODE
+
 static struct MemberInfo head;
 static mem_info mem_p;
 static char buf[BUFF_SIZE] = {'\0'};
@@ -14,7 +16,7 @@ static struct timeval timeout;
 static char *name;
 static int max_sd = 0;
 
-static void deletefromList(mem_info delete_node);
+static void deletefromList(int sock);
 
 static void addInList(mem_info new_node);
 
@@ -22,7 +24,9 @@ static u_int32_t analyze_header(char *header);
 
 static void login();
 
-static void postMessage(int _sock);
+static void logout(int sock);
+
+static void postMessage(int sock);
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock);
 
@@ -32,14 +36,14 @@ static void showList();
 
 static void create_packet(u_int32_t type, char *message);
 
-static void checkUdpConnect(int signo);
+static void checkUdpConnect();
 
 static void clearBuf();
 
 void initializeServer(char *_name, in_port_t _port) {
     name = _name;
     port = _port;
-    timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_sec = 0;
     timeout.tv_usec = 0;
 
     my_set_sockaddr_in_broadcast(&broadcast_adrs, port);
@@ -59,42 +63,20 @@ void initializeServer(char *_name, in_port_t _port) {
 void server_mainloop() {
     fd_set mask, readfds;
     FD_ZERO(&mask);
-    struct sigaction action;
-    /* シグナルハンドラを設定する */
-    action.sa_handler = checkUdpConnect;
-
-    if (sigfillset(&action.sa_mask) == -1) {
-        exit_errmesg("sigfillset()");
-    }
-    action.sa_flags = 0;
-    if (sigaction(SIGIO, &action, NULL) == -1) {
-        exit_errmesg("sigaction()");
-    }
-    /* ソケットの所有者を自分自身にする */
-    if (fcntl(sock_udp, F_SETOWN, getpid()) == -1) {
-        exit_errmesg("fcntl():F_SETOWN");
-    }
-
-    /* ソケットをノンブロッキング, 非同期モードにする */
-    if (fcntl(sock_udp, F_SETFL, O_NONBLOCK | O_ASYNC) == -1) {
-        exit_errmesg("fcntl():F_SETFL");
-    }
 
     while (1) {
+
+        checkUdpConnect();
+
         mem_info sock_p = mem_p;
         if (sock_p->sock != DUMMY_SOCK) { //joinされてリストにsockが格納されてから通信を始めることを保証
-
             FD_SET(0, &mask);
             while (sock_p->next != NULL) {
                 FD_SET(sock_p->sock, &mask);
-                printf("set %d\n", sock_p->sock);
                 sock_p = sock_p->next;
             }
 
             sock_p = mem_p;
-
-            timeout.tv_sec = 1;
-            timeout.tv_usec = 0;
 
             readfds = mask;
             select(max_sd + 1, &readfds, NULL, NULL, &timeout);
@@ -110,6 +92,9 @@ void server_mainloop() {
                             break;
                         }
                         case QUIT: {
+                            logout(sock_p->sock);
+                            showList();
+                            FD_CLR(sock_p->sock, &mask);
                             break;
                         }
                         default:
@@ -133,7 +118,9 @@ void server_mainloop() {
                     my_send(sock_p->sock, buf, strlen(buf), SO_NOSIGPIPE);
                     sock_p = sock_p->next;
                 }
+#ifdef DEBUG_MODE
                 printf("[input] %s\n", buf);
+#endif
                 clearBuf();
             }
         }
@@ -149,53 +136,76 @@ static void clearBuf() {
 }
 
 static void login() {
+#ifdef DEBUG_MODE
     printf("[INFO] login\n");
-    fflush(stdout);
+#endif
     mem_info new_node = newNode(packet->data, sock_tcp);
     addInList(new_node);
 }
 
-static void postMessage(int _sock) {
+static void logout(int sock) {
+    deletefromList(sock);
+    close(sock);
+}
+
+static void postMessage(int sock) {
+    mem_info p = mem_p;
     char message[BUFF_SIZE];
-    snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(_sock), packet->data);
+    snprintf(message, BUFF_SIZE, "[%s] %s", getNameInList(sock), packet->data);
     create_packet(MESSAGE, message);
     chopNl(buf, BUFF_SIZE);
 
-    my_send(_sock, buf, BUFF_SIZE, SO_NOSIGPIPE);
+#ifdef DEBUG_MODE
     printf("[post] %s\n", buf);
+#endif
+    while (p->next != NULL) {
+        my_send(p->sock, buf, BUFF_SIZE, SO_NOSIGPIPE);
+        p = p->next;
+    }
     clearBuf();
 }
 
-static void checkUdpConnect(int signo) {
-    printf("[INFO] detected UDP connection\n");
-    socklen_t from_len = sizeof(from_adrs);
-    if (my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len) == -1 &&
-        errno == EWOULDBLOCK) {
-        printf("[INFO] EWOULDBLOCK\n");
-        return;
-    }
-    packet = (my_packet *) buf;
-    if (strcmp(packet->header, "HELO") == 0) {
-        create_packet(HERE, "");
-        my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
-    }
+static void checkUdpConnect() {
+    fd_set mask, readfds;
+    FD_ZERO(&mask);
+    FD_SET(sock_udp, &mask);
 
-    sock_tcp = my_accept(sock_listen, NULL, NULL);
-    max_sd = sock_tcp;
+    readfds = mask;
+    select(sock_udp + 1, &readfds, NULL, NULL, &timeout);
 
-    my_receive(sock_tcp, buf, BUFF_SIZE - 1);
-    packet = (my_packet *) buf;
-
-    switch (analyze_header(packet->header)) {
-        case JOIN: {
-            login();
-            showList();
-            break;
+    if (FD_ISSET(sock_udp, &readfds)) {
+#ifdef DEBUG_MODE
+        printf("[INFO] detected UDP connection\n");
+#endif
+        socklen_t from_len = sizeof(from_adrs);
+        if (my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len) == -1 &&
+            errno == EWOULDBLOCK) {
+            printf("[INFO] EWOULDBLOCK\n");
+            return;
         }
-        default:
-            break;
+        packet = (my_packet *) buf;
+        if (strcmp(packet->header, "HELO") == 0) {
+            create_packet(HERE, "");
+            my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
+        }
+
+        sock_tcp = my_accept(sock_listen, NULL, NULL);
+        max_sd = sock_tcp;
+
+        my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+        packet = (my_packet *) buf;
+
+        switch (analyze_header(packet->header)) {
+            case JOIN: {
+                login();
+                showList();
+                break;
+            }
+            default:
+                break;
+        }
+        clearBuf();
     }
-    clearBuf();
 }
 
 static mem_info newNode(char user_name[NAME_LENGTH], int sock) {
@@ -219,10 +229,10 @@ static void addInList(mem_info new_node) {
     mem_p = new_node;
 }
 
-static void deletefromList(mem_info delete_node) {
+static void deletefromList(int sock) {
     mem_info *pp;
-    pp = &((&head)->next);
-    while (((*pp)->username != delete_node->username) && ((*pp)->sock != delete_node->sock)) {
+    pp = &(mem_p->next);
+    while (((*pp)->sock != sock)) {
         pp = &((*pp)->next);
     }
     if ((*pp)->next != NULL) {
