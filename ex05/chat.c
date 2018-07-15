@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
         mode = setMode(name, port);
     }
 
+
     switch (mode) {
         case SERVER:
             initializeServer(name, DEFAULT_PORT);

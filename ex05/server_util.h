@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <errno.h>
 
-
 typedef struct MyPacket {
     char header[4];   /* パケットのヘッダ部(4バイト) */
     char sep;         /* セパレータ(空白、またはゼロ) */

@@ -1,6 +1,6 @@
 #include "server_util.h"
 
-#define DEBUG_MODE
+#define EXEC_MODE
 
 static struct MemberInfo head;
 static mem_info mem_p;
@@ -122,6 +122,8 @@ void server_mainloop() {
                 }
 #ifdef DEBUG_MODE
                 printf("[input] %s\n", buf);
+#elif defined(EXEC_MODE)
+                printf("%s\n", message);
 #endif
                 clearBuf();
             }
@@ -246,7 +248,7 @@ static void deletefromList(int sock) {
 
 static void showList() {
     mem_info p = mem_p;
-    if(p->next == NULL){
+    if (p->next == NULL) {
         printf("Nothing in List\n");
     }
     while (p->next != NULL) {

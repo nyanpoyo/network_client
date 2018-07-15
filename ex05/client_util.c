@@ -1,6 +1,8 @@
 #include "client_util.h"
 #include "server_util.h"
 
+#define EXEC_MODE
+
 static char buf[BUFF_SIZE];
 static struct sockaddr_in broadcast_adrs;
 static struct sockaddr_in from_adrs;
@@ -23,7 +25,6 @@ static void postMessage();
 static void clearBuf();
 
 static u_int32_t analyze_header(char *header);
-
 
 enum Mode setMode(char *_name, in_port_t _port) {
     name = _name;
@@ -85,7 +86,9 @@ enum Mode setMode(char *_name, in_port_t _port) {
 }
 
 void client_mainloop() {
+#ifdef DEBUG_MODE
     printf("[INFO] client loop\n");
+#endif
     sock_tcp = init_tcpclient(inet_ntoa(from_adrs.sin_addr), port);
 
     fd_set mask, readfds;
@@ -121,7 +124,11 @@ static void receiveMessage() {
 
     switch (analyze_header(packet->header)) {
         case MESSAGE: {
+#ifdef DEBUG_MODE
             printf("[receive] %s\n", packet->data);
+#elif defined(EXEC_MODE)
+            printf("%s\n", packet->data);
+#endif
             break;
         }
     }
@@ -131,17 +138,21 @@ static void receiveMessage() {
 static void postMessage() {
     char input_buff[BUFF_SIZE];
     fgets(input_buff, BUFF_SIZE, stdin);
-    chopNl(input_buff,BUFF_SIZE);
+    chopNl(input_buff, BUFF_SIZE);
     if (strcmp(input_buff, "QUIT") == 0) {
         create_packet(QUIT, "");
         my_send(sock_tcp, buf, strlen(buf), 0);
+#ifdef DEBUG_MODE
         printf("[post] %s\n", buf);
+#endif
         close(sock_tcp);
         exit(0);
     } else {
         create_packet(POST, input_buff);
         my_send(sock_tcp, buf, strlen(buf), 0);
+#ifdef DEBUG_MODE
         printf("[post] %s\n", buf);
+#endif
     }
     clearBuf();
 }
