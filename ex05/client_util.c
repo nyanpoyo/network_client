@@ -53,32 +53,40 @@ enum Mode setMode(char *_name, in_port_t _port) {
     my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &broadcast_adrs,
               sizeof(broadcast_adrs));
 
+#ifdef DEBUG_MODE
+    printf("[send] HELLO packet\n");
+#endif
+
     while (1) {
         /* 受信データの有無をチェック */
         readfds = mask;
 
-        if (select(sock_udp + 1, &readfds, NULL, NULL, &timeout) == 0) {
-            ask_count++;
-            fprintf(stderr, "time out\n");
-            if (ask_count < 3) {
-                create_packet(HELLO, "");
-                my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &broadcast_adrs,
-                          sizeof(broadcast_adrs));
-            } else {
-                mode = SERVER;
-                break;
-            }
+        select(sock_udp + 1, &readfds, NULL, NULL, &timeout);
+        ask_count++;
+        fprintf(stderr, "time out\n");
+        if (ask_count < 3) {
+            create_packet(HELLO, "");
+            my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &broadcast_adrs,
+                      sizeof(broadcast_adrs));
+#ifdef DEBUG_MODE
+            printf("[send] HELLO packet\n");
+#endif
         } else {
-            if (FD_ISSET(sock_udp, &readfds)) {
-                socklen_t from_len = sizeof(from_adrs);
-                int str_size = my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
-                buf[str_size] = '\0';
-                my_packet *packet;
-                packet = (my_packet *) buf;
-                if (strcmp(packet->header, "HERE") == 0) {
-                    mode = CLIENT;
-                    break;
-                }
+            mode = SERVER;
+            break;
+        }
+        if (FD_ISSET(sock_udp, &readfds)) {
+            socklen_t from_len = sizeof(from_adrs);
+            int str_size = my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
+            buf[str_size] = '\0';
+            my_packet *packet;
+            packet = (my_packet *) buf;
+            if (strcmp(packet->header, "HERE") == 0) {
+#ifdef DEBUG_MODE
+                printf("[receive] HERE packet\n");
+#endif
+                mode = CLIENT;
+                break;
             }
         }
     }

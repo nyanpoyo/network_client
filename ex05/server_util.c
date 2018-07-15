@@ -194,6 +194,9 @@ static void checkUdpConnect() {
         if (strcmp(packet->header, "HELO") == 0) {
             create_packet(HERE, "");
             my_sendto(sock_udp, buf, BUFF_SIZE, 0, (struct sockaddr *) &from_adrs, from_len);
+#ifdef DEBUG_MODE
+            printf("[send] HERE packet\n");
+#endif
         }
 
         sock_tcp = my_accept(sock_listen, NULL, NULL);
