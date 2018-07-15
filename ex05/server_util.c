@@ -161,7 +161,10 @@ static void postMessage(int sock) {
 
 #ifdef DEBUG_MODE
     printf("[post] %s\n", buf);
+#elif defined(EXEC_MODE)
+    printf("%s\n", message);
 #endif
+
     while (p->next != NULL) {
         my_send(p->sock, buf, BUFF_SIZE, SO_NOSIGPIPE);
         p = p->next;
