@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
                 port = atoi(optarg);
                 break;
             case 'S':
-                initializeServer(name, DEFAULT_PORT);
+                initializeServer(name, port);
                 server_mainloop();
                 break;
             case 'C':

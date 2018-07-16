@@ -196,11 +196,7 @@ static void checkUdpConnect() {
         printf("[INFO] detected UDP connection\n");
 #endif
         socklen_t from_len = sizeof(from_adrs);
-        if (my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len) == -1 &&
-            errno == EWOULDBLOCK) {
-            printf("[INFO] EWOULDBLOCK\n");
-            return;
-        }
+        my_recvfrom(sock_udp, buf, BUFF_SIZE - 1, 0, (struct sockaddr *) &from_adrs, &from_len);
         packet = (my_packet *) buf;
         if (strcmp(packet->header, "HELO") == 0) {
             create_packet(HERE, "");
