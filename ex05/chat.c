@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
     switch (mode) {
         case SERVER:
-            initializeServer(name, DEFAULT_PORT);
+            initializeServer(name, port);
             server_mainloop();
             break;
         case CLIENT:

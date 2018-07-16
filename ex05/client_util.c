@@ -94,9 +94,8 @@ enum Mode setMode(char *_name, in_port_t _port) {
 }
 
 void client_mainloop() {
-#ifdef DEBUG_MODE
-    printf("[INFO] client loop\n");
-#endif
+    printf("[INFO] I am client\n");
+
     sock_tcp = init_tcpclient(inet_ntoa(from_adrs.sin_addr), port);
 
     fd_set mask, readfds;
@@ -127,7 +126,10 @@ static void join() {
 }
 
 static void receiveMessage() {
-    my_receive(sock_tcp, buf, BUFF_SIZE - 1);
+    if (my_receive(sock_tcp, buf, BUFF_SIZE - 1) == 0) {
+        fprintf(stderr, "Server is down\n");
+        exit(EXIT_FAILURE);
+    }
     packet = (my_packet *) buf;
 
     switch (analyze_header(packet->header)) {

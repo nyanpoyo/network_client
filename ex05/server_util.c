@@ -61,6 +61,7 @@ void initializeServer(char *_name, in_port_t _port) {
 }
 
 void server_mainloop() {
+    printf("[INFO] I am server\n");
     fd_set mask, readfds;
     FD_ZERO(&mask);
 
@@ -117,12 +118,17 @@ void server_mainloop() {
                 snprintf(message, BUFF_SIZE, "[%s] %s", name, input_buff);
                 create_packet(MESSAGE, message);
                 while (sock_p->next != NULL) {
-                    my_send(sock_p->sock, buf, strlen(buf), SO_NOSIGPIPE);
+                    if (my_send(sock_p->sock, buf, strlen(buf), SO_NOSIGPIPE) == -1) {
+                        if (errno == EPIPE) {
+                            close(sock_p->sock);
+                        }
+                    }
                     sock_p = sock_p->next;
                 }
 #ifdef DEBUG_MODE
                 printf("[input] %s\n", buf);
 #elif defined(EXEC_MODE)
+                chopNl(message, BUFF_SIZE);
                 printf("%s\n", message);
 #endif
                 clearBuf();
@@ -162,11 +168,16 @@ static void postMessage(int sock) {
 #ifdef DEBUG_MODE
     printf("[post] %s\n", buf);
 #elif defined(EXEC_MODE)
+    chopNl(message, BUFF_SIZE);
     printf("%s\n", message);
 #endif
 
     while (p->next != NULL) {
-        my_send(p->sock, buf, BUFF_SIZE, SO_NOSIGPIPE);
+        if (my_send(p->sock, buf, BUFF_SIZE, SO_NOSIGPIPE) == -1) {
+            if (errno == EPIPE) {
+                close(p->sock);
+            }
+        };
         p = p->next;
     }
     clearBuf();
