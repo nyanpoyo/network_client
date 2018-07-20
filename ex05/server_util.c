@@ -1,6 +1,6 @@
 #include "server_util.h"
 
-#define EXEC_MODE
+#define DEBUG_MODE
 
 static struct MemberInfo head;
 static mem_info mem_p;
@@ -84,7 +84,16 @@ void server_mainloop() {
 
             while (sock_p->next != NULL) {
                 if (FD_ISSET(sock_p->sock, &readfds)) {
-                    my_receive(sock_p->sock, buf, BUFF_SIZE - 1);
+                    if (my_receive(sock_p->sock, buf, BUFF_SIZE - 1) == -1) {
+                        if (errno == EAGAIN) {
+                            fprintf(stderr, "Client is down?\n");
+                            logout(sock_p->sock);
+#ifdef DEBUG_MODE
+                            showList();
+#endif
+                            FD_CLR(sock_p->sock, &mask);
+                        }
+                    }
                     packet = (my_packet *) buf;
 
                     switch (analyze_header(packet->header)) {
@@ -111,6 +120,8 @@ void server_mainloop() {
             sock_p = mem_p;
 
             if (FD_ISSET(0, &readfds)) {
+                printf("aaa\n");
+                fflush(stdout);
                 char input_buff[BUFF_SIZE];
                 char message[BUFF_SIZE];
                 fgets(input_buff, BUFF_SIZE, stdin);
