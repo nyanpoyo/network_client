@@ -1,6 +1,6 @@
 #include "server_util.h"
 
-#define DEBUG_MODE
+#define EXEC_MODE
 
 static struct MemberInfo head;
 static mem_info mem_p;
@@ -84,16 +84,7 @@ void server_mainloop() {
 
             while (sock_p->next != NULL) {
                 if (FD_ISSET(sock_p->sock, &readfds)) {
-                    if (my_receive(sock_p->sock, buf, BUFF_SIZE - 1) == -1) {
-                        if (errno == EAGAIN) {
-                            fprintf(stderr, "Client is down?\n");
-                            logout(sock_p->sock);
-#ifdef DEBUG_MODE
-                            showList();
-#endif
-                            FD_CLR(sock_p->sock, &mask);
-                        }
-                    }
+                    my_receive(sock_p->sock, buf, BUFF_SIZE - 1);
                     packet = (my_packet *) buf;
 
                     switch (analyze_header(packet->header)) {
@@ -129,8 +120,11 @@ void server_mainloop() {
                 snprintf(message, BUFF_SIZE, "[%s] %s", name, input_buff);
                 create_packet(MESSAGE, message);
                 while (sock_p->next != NULL) {
-                    if (my_send(sock_p->sock, buf, strlen(buf), SO_NOSIGPIPE) == -1) {
+                    if (send(sock_p->sock, buf, strlen(buf), MSG_NOSIGNAL) == -1) {
                         if (errno == EPIPE) {
+                            fprintf(stderr,"epipe error\n");
+                            logout(sock_p->sock);
+                            FD_CLR(sock_p->sock,&mask);
                             close(sock_p->sock);
                         }
                     }
@@ -184,8 +178,10 @@ static void postMessage(int sock) {
 #endif
 
     while (p->next != NULL) {
-        if (my_send(p->sock, buf, BUFF_SIZE, SO_NOSIGPIPE) == -1) {
+        if (send(p->sock, buf, BUFF_SIZE, MSG_NOSIGNAL) == -1) {
             if (errno == EPIPE) {
+                fprintf(stderr,"epipe error\n");
+                logout(p->sock);
                 close(p->sock);
             }
         };

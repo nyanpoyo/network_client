@@ -61,7 +61,7 @@ enum Mode setMode(char *_name, in_port_t _port) {
         /* 受信データの有無をチェック */
         readfds = mask;
 
-        select(sock_udp + 1, &readfds, NULL, NULL, &timeout);
+        select(sock_udp + 1, &readfds, NULL, NULL, NULL);
         ask_count++;
         fprintf(stderr, "time out\n");
         if (ask_count < 3) {
@@ -107,7 +107,7 @@ void client_mainloop() {
 
     while (1) {
         readfds = mask;
-        select(sock_tcp + 1, &readfds, NULL, NULL, NULL);
+        select(sock_tcp + 1, &readfds, NULL, NULL, &timeout);
 
         if (FD_ISSET(sock_tcp, &readfds)) {
             receiveMessage();
@@ -137,6 +137,7 @@ static void receiveMessage() {
 #ifdef DEBUG_MODE
             printf("[receive] %s\n", packet->data);
 #elif defined(EXEC_MODE)
+            chopNl(buf, BUFF_SIZE);
             printf("%s\n", packet->data);
 #endif
             break;
